@@ -1,0 +1,2 @@
+highScore:300
+lastScore:150

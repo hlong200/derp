@@ -1,15 +1,12 @@
 package com.dooplopper.games;
 
-import java.awt.Font;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.Random;
 
-import org.lwjgl.LWJGLException;
-import org.lwjgl.input.Controller;
-import org.lwjgl.input.Controllers;
 import org.newdawn.slick.AppGameContainer;
 import org.newdawn.slick.BasicGame;
 import org.newdawn.slick.Color;
@@ -19,60 +16,64 @@ import org.newdawn.slick.Input;
 import org.newdawn.slick.Music;
 import org.newdawn.slick.SlickException;
 import org.newdawn.slick.Sound;
-import org.newdawn.slick.TrueTypeFont;
 import org.newdawn.slick.geom.Circle;
 import org.newdawn.slick.geom.Rectangle;
 import org.newdawn.slick.geom.Shape;
 import org.newdawn.slick.geom.Vector2f;
-import org.newdawn.slick.openal.Audio;
 
 public class Derp extends BasicGame {
 	
-	protected static int width = 640;
-	protected static int height = 480;
-	private int stage = 1;
-	private int stageCount = 3;
-	private int view = 0;
-	private int stageEnemies = 0;
+	protected static int width;
+	protected static int height;
+	private int stage;
+	private int view;
+	private int stageEnemies;
+	private int highScore;
+	private int lastScore;
 	
-	private static boolean fullScreen = true;
-	private boolean up = false;
-	private boolean down = false;
-	private boolean left = false;
-	private boolean right = false;
-	private boolean drawing = false;
-	private boolean transitioning = false;
-	private boolean collides = false;
-	private boolean useWASD = true;
-	private boolean showStats = true;
+	//private static boolean fullScreen;
+	private boolean up;
+	private boolean down;
+	private boolean left;
+	private boolean right;
+	private boolean drawing;
+	private boolean transitioning;
+	private boolean collides;
+	private boolean useWASD;
+	private boolean showStats;
 	
-	private Player pawn = new Player(new Rectangle(0, 0, width / 16, height / 16), 0, 0, 5);
-	private Rectangle highlight = new Rectangle(0, 0, 0, 0);
-	private Circle mouseCircle = new Circle(0, 0, 16);
+	private Player pawn;
+	private Rectangle highlight;
+	private Circle mouseCircle;
 	
-	private Vector2f pawnHeading = new Vector2f();
-	private Vector2f mouseLoc = new Vector2f();
-	private Vector2f mouseLocStart = new Vector2f();
+	private Vector2f pawnHeading;
+	private Vector2f mouseLoc;
+	private Vector2f mouseLocStart;
 	
-	ArrayList<Shape> objects = new ArrayList<Shape>();
-	ArrayList<Color> colors = new ArrayList<Color>();
-	ArrayList<Enemy> enemies = new ArrayList<Enemy>();
-	ArrayList<Enemy> deadEnemies = new ArrayList<Enemy>();
-	ArrayList<Bullet> bullets = new ArrayList<Bullet>();
-	ArrayList<Bullet> deadBullets = new ArrayList<Bullet>();
-	ArrayList<PowerUp> powerUps = new ArrayList<PowerUp>();
-	ArrayList<PowerUp> deadPowerUps = new ArrayList<PowerUp>();
+	ArrayList<Shape> objects;
+	ArrayList<Color> colors;
+	ArrayList<Enemy> enemies;
+	ArrayList<Enemy> deadEnemies;
+	ArrayList<Bullet> bullets;
+	ArrayList<Bullet> deadBullets;
+	ArrayList<PowerUp> powerUps;
+	ArrayList<PowerUp> deadPowerUps;
 	
-	private Music backgroundMusic;
-	private ArrayList<Sound> pews = new ArrayList<Sound>();
+	ArrayList<Music> songs;
+	private Music currentSong;
+	private ArrayList<Sound> pews;
+	BufferedReader in;
 	
-	private Random rand = new Random();
+	private String[] controls = {"Controls:", "- Mouse to aim, left click to fire", "- WASD keys move pawn", "- F1 skips current song in queue", "- F3 changes debug visibility"};
+	
+	private Random rand;
 	
 	private long lastUpdate;
 	private long enemyUpdate;
 	private long nextStage;
 	private long transition;
 	private long lastPew;
+	private long phaseDelta;
 	
 	/*private float lX;
 	private float lY;
@@ -108,6 +109,29 @@ public class Derp extends BasicGame {
 		
 	}
 	
+	public void updateMusicQueue(boolean skip) {
+		if(currentSong == null) {
+			currentSong = songs.get(rand.nextInt(songs.size()));
+			currentSong.play();
+			
+		} else {
+			if(skip) {
+				currentSong = songs.get(rand.nextInt(songs.size()));
+				currentSong.play();
+				
+			} else {
+				if(!currentSong.playing()) {
+					currentSong = songs.get(rand.nextInt(songs.size()));
+					currentSong.play();
+					
+				}
+				
+			}
+			
+		}
+		
+	}
+	
 	public void updateCollision() {
 		for(Bullet b: bullets) {
 			if(b.getHealth() != 0) {
@@ -132,10 +156,12 @@ public class Derp extends BasicGame {
 		for(Enemy e: enemies) {
 			if(e.getHealth() > 0 && pawn.getHealth() > 0) {
 				if(pawn.getShape().intersects(e.getShape())) {
-					if(System.currentTimeMillis() - pawn.lastAttack > 1000) {
+					if(System.currentTimeMillis() - pawn.lastAttack > 3000) {
 						pawn.setHealth(pawn.getHealth() - 1);
 						e.setHealth(e.getHealth() - 1);
+						pawn.setPhasing(true);
 						pawn.lastAttack = System.currentTimeMillis();
+						phaseDelta = System.currentTimeMillis();
 						
 					}
 					
@@ -173,28 +199,62 @@ public class Derp extends BasicGame {
 		if(view == 0) {
 			g.setColor(Color.blue);
 			g.drawString("Welcome to... Derp?", width / 2 - 100, height / 2 - 20);
+			g.drawString("Previous Score: " + lastScore, width / 2 - 100, height / 2 + 20);
+			g.drawString("High Score: " + highScore, width / 2 - 100, height / 2 + 60);
+			
+			for(int i = 0; i < controls.length; i++) {
+				g.drawString(controls[i], width / 2 - 100, height / 2 + 250 + (40 * i));
+				
+			}
 			
 		}else if(view == 1) {
 			g.setColor(Color.yellow);
 			if(showStats) {
-				g.drawString("Up: " + up + " | Down: " + down + " | Left: " + left + " | Right: " + right + " | Health: " + pawn.getHealth() + " | Drawing: " + drawing + " | Stage: " + stage + " | Enemies: " + enemies.size() + " | Collision: " + collides + " | Pawn Heading: x: " + pawn.xVel + " -- y: " + pawn.yVel, 0, height - 20);
+				g.drawString("Up: " + up + " | Down: " + down + " | Left: " + left + " | Right: " + right + " | Health: " + pawn.getHealth() + " | Phasing: " + pawn.getPhasing() + " | Stage: " + stage + " | Enemies: " + enemies.size() + " | Collision: " + collides + " | Pawn Heading: x: " + pawn.xVel + " -- y: " + pawn.yVel, 0, height - 20);
 				
 			}
 			
 			if(transitioning) {
-				if(transition >= 1000) {
-					if(stageCount != 0) {
-						g.drawString("Next Stage: " + stageCount, width / 2 - 40, height / 2 - 10);
-						stageCount -= 1;
-						
-					}
-					
-				}
+				view = 2;
+				
 				
 			}
 			
 			g.setColor(Color.blue);
-			g.draw(pawn.getShape());
+			if(pawn.getPhasing() == true) {
+				if(System.currentTimeMillis() - pawn.lastAttack > 3000) {
+					if(System.currentTimeMillis() - phaseDelta > 50) {
+						if(pawn.getPhaseState() == 0) {
+							pawn.setPhaseState(1);
+							phaseDelta = System.currentTimeMillis();
+							
+						} else if(pawn.getPhaseState() == 1) {
+							pawn.setPhaseState(0);
+							phaseDelta = System.currentTimeMillis();
+							
+						}
+						
+					} else {
+						if(pawn.getPhaseState() == 0) {
+							g.draw(pawn.getShape());
+							
+						} else if(pawn.getPhaseState() == 1) {
+							g.fill(pawn.getShape());
+							
+						}
+						
+					}
+					
+				} else {
+					pawn.setPhaseState(1);
+					g.fill(pawn.getShape());
+					
+				}
+				
+			} else {
+				g.fill(pawn.getShape());
+				
+			}
 			
 			g.setColor(Color.red);
 			
@@ -240,8 +300,18 @@ public class Derp extends BasicGame {
 			
 			g.setColor(Color.red);
 			g.fillRect(width - 100, 0, 100 * (pawn.getHealth() / 5f), 20);
+			g.drawRect(width - 100, 0, 100, 20);
 			
 		} else if(view == 2) {
+			if(System.currentTimeMillis() - transition < 3000) {
+				g.drawString("Stage: " + (stage + 1), width / 2 - 40, height / 2 - 20);
+				
+			} else {
+				view = 1;
+				
+			}
+			
+		} else if(view == 3) {
 			g.setColor(Color.red);
 			g.drawString("Game Over!", width / 2 - 100, height / 2 - 20);
 			
@@ -250,23 +320,97 @@ public class Derp extends BasicGame {
 	}
 
 	@Override
-	public void init(GameContainer gc) throws SlickException {
+	public void init(GameContainer gc) throws SlickException {		
+		width = gc.getScreenWidth();
+		height = gc.getScreenHeight();
+		gc.setFullscreen(true);
+		stage = 1;
+		view = 0;
+		stageEnemies = 0;
+		
+		//fullScreen = true;
+		up = false;
+		down = false;
+		left = false;
+		right = false;
+		drawing = false;
+		transitioning = false;
+		collides = false;
+		useWASD = true;
+		showStats = true;
+		
+		pawn = new Player(new Rectangle(0, 0, height / 16, height / 16), 0, 0, 5);
+		highlight = new Rectangle(0, 0, 0, 0);
+		mouseCircle = new Circle(0, 0, 16);
+		
+		pawnHeading = new Vector2f();
+		mouseLoc = new Vector2f();
+		mouseLocStart = new Vector2f();
+		
+		objects = new ArrayList<Shape>();
+		colors = new ArrayList<Color>();
+		enemies = new ArrayList<Enemy>();
+		deadEnemies = new ArrayList<Enemy>();
+		bullets = new ArrayList<Bullet>();
+		deadBullets = new ArrayList<Bullet>();
+		powerUps = new ArrayList<PowerUp>();
+		deadPowerUps = new ArrayList<PowerUp>();
+		
+		pews = new ArrayList<Sound>();
+		
+		rand = new Random();
+		
 		System.out.println(System.getProperty("user.dir"));
-		backgroundMusic = new Music("/res/rerezzed.ogg");
+		songs = new ArrayList<Music>();
+		songs.add(new Music("/res/rerezzed.ogg"));
+		songs.add(new Music("/res/immortals.ogg"));
+		songs.add(new Music("/res/danger.ogg"));
+		songs.add(new Music("/res/ghostbusters.ogg"));
+		songs.add(new Music("/res/heathens.ogg"));
+		songs.add(new Music("/res/tiger.ogg"));
+		songs.add(new Music("/res/lucky.ogg"));
 		pews.add(new Sound("/res/pew1.ogg"));
 		pews.add(new Sound("/res/pew2.ogg"));
 		pews.add(new Sound("/res/pew3.ogg"));
 		pews.add(new Sound("/res/pew4.ogg"));
+		
+		try {
+			in = new BufferedReader(new FileReader("data.txt"));
+			
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+			
+		}
+		
+		String line;
+		try {
+			while((line = in.readLine()) != null) {
+				String[] herder = line.split(":");
+				if(herder[0].toLowerCase().equals("highscore")) {
+					highScore = Integer.parseInt(herder[1]);
+					
+				} else if(herder[0].toLowerCase().equals("lastscore")) {
+					lastScore = Integer.parseInt(herder[1]);
+					
+				}
+				
+			}
+						
+		} catch (IOException e) {
+			e.printStackTrace();
+			
+		}
+		
 		colors.add(new Color(0, 223, 38));
 		colors.add(new Color(16, 6, 159));
 		colors.add(new Color(Color.magenta));
-		backgroundMusic.play(1, .75f);
+		
 		pawnHeading.set(0, 0);
-		pawn.setHealth(3);
 		lastUpdate = System.currentTimeMillis();
 		enemyUpdate = System.currentTimeMillis();
 		lastPew = System.currentTimeMillis();
 		pawn.lastAttack = System.currentTimeMillis();
+		
 		
 		/*try {
 			Controllers.create();
@@ -290,7 +434,14 @@ public class Derp extends BasicGame {
 			
 		}
 		
+		if(in.isKeyPressed(Input.KEY_F1)) {
+			updateMusicQueue(true);
+			
+		}
+		
 		//lX = controller.getXAxisValue();
+		
+		updateMusicQueue(false);
 		
 		if(view == 0) {
 			if(in.isKeyPressed(Input.KEY_SPACE)) {
@@ -426,14 +577,7 @@ public class Derp extends BasicGame {
 					
 				} else {
 					
-					if(stageEnemies >= stage * 5) {
-						enemies.clear();
-						stageEnemies = 0;
-						transitioning = true;
-						nextStage = System.currentTimeMillis();
-						transition = System.currentTimeMillis();
-						
-					} else {
+					if(stageEnemies < stage * 5) {
 						if(rand.nextInt(10) == 1) {
 							powerUps.add(new PowerUp(new Circle(rand.nextInt(width), rand.nextInt(height), 16), 0, 0, 1, rand.nextInt(2)));
 							
@@ -442,6 +586,14 @@ public class Derp extends BasicGame {
 							stageEnemies += 1;
 							
 						}
+						
+						
+					} else if(stageEnemies >= stage * 5 && enemies.size() == 0) {
+						enemies.clear();
+						stageEnemies = 0;
+						transitioning = true;
+						nextStage = System.currentTimeMillis();
+						transition = System.currentTimeMillis();
 						
 					}
 					
@@ -453,7 +605,7 @@ public class Derp extends BasicGame {
 			
 			if(System.currentTimeMillis() - lastUpdate > 16) {
 				if(pawn.getHealth() <= 0) {
-					view = 2;
+					view = 3;
 					
 				} else {
 					if(pawnHeading.getX() == 1 && pawnHeading.getY() == 1) {
@@ -544,8 +696,11 @@ public class Derp extends BasicGame {
 			}
 			
 		} else if(view == 2) {
+			
+			
+		} else if(view == 3) {
 			if(in.isKeyPressed(Input.KEY_SPACE)) {
-				pawn.setHealth(3);
+				this.init(gc);
 				view = 0;
 				
 			}
@@ -564,10 +719,10 @@ public class Derp extends BasicGame {
 	
 	public static void main(String[] args) {
 		try {
-			AppGameContainer appgc = new AppGameContainer(new Derp(""));
+			AppGameContainer appgc = new AppGameContainer(new Derp("Derp"));
 			width = appgc.getScreenWidth();
 			height = appgc.getScreenHeight();
-			appgc.setDisplayMode(width, height, fullScreen);
+			appgc.setDisplayMode(width, height, true);
 			appgc.setShowFPS(true);
 			appgc.start();
 			

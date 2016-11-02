@@ -6,10 +6,13 @@ public class Entity {
 	
 	protected Shape shape;
 	protected int health;
+	protected int phaseState;
 	protected float xVel;
 	protected float yVel;
 	protected boolean visible = true;
 	protected long lastAttack;
+	protected long lastPhase;
+	protected boolean phasing = false;
 
 	public Entity(Shape s) {
 		shape = s;
@@ -66,6 +69,26 @@ public class Entity {
 	
 	protected void setVisible(boolean visible) {
 		this.visible = visible;
+		
+	}
+	
+	protected boolean getPhasing() {
+		return phasing;
+		
+	}
+	
+	protected void setPhasing(boolean phasing) {
+		this.phasing = phasing;
+		
+	}
+	
+	protected int getPhaseState() {
+		return phaseState;
+		
+	}
+	
+	protected void setPhaseState(int phaseState) {
+		this.phaseState = phaseState;
 		
 	}
 

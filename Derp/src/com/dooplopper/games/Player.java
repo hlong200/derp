@@ -16,14 +16,14 @@ public class Player extends Entity {
 		
 	}
 	
-	public void update() {
-		if(!(shape.getX() + xVel > Derp.width || shape.getX() + xVel < 0)) {
+	public void update() {		
+		if(!(shape.getMaxX() + xVel > Derp.width || shape.getMinX() + xVel < 0)) {
 			shape.setX(shape.getX() + xVel);
 			
 			
 		}
 		
-		if(!(shape.getY() + yVel > Derp.height || shape.getY() + yVel < 0)) {
+		if(!(shape.getMaxY() + yVel > Derp.height || shape.getMinY() + yVel < 0)) {
 			shape.setY(shape.getY() + yVel);
 			
 		}
@@ -34,6 +34,14 @@ public class Player extends Entity {
 					effectsToBeRemoved.add(effect.getKey());
 					
 				}
+				
+			}
+			
+		}
+		
+		if(phasing == true) {
+			if(System.currentTimeMillis() - lastAttack > 1000) {
+				phasing = false;
 				
 			}
 			
